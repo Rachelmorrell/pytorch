@@ -14,8 +14,10 @@ using namespace at;
 
 namespace {
 
+constexpr auto kCustomRNG = DispatchKey::CustomRNGKeyId;
+
 struct TestCPUGenerator : public c10::GeneratorImpl {
-  TestCPUGenerator(uint64_t value) : GeneratorImpl{Device(DeviceType::CPU), DispatchKeySet(DispatchKey::CustomRNGKeyId)}, value_(value) { }
+  TestCPUGenerator(uint64_t value) : GeneratorImpl{Device(DeviceType::CPU), DispatchKeySet(kCustomRNG)}, value_(value) { }
   ~TestCPUGenerator() = default;
   uint32_t random() { return value_; }
   uint64_t random64() { return value_; }
@@ -79,6 +81,12 @@ Tensor normal_Tensor_Tensor(const Tensor& mean, const Tensor& std, Generator gen
   return at::native::templates::normal_impl<native::templates::cpu::NormalKernel, TestCPUGenerator>(mean, std, gen);
 }
 
+// ==================================================== Uniform =======================================================
+
+Tensor& uniform_(Tensor& self, double from, double to, Generator generator) {
+  return at::native::templates::uniform_impl_<native::templates::cpu::UniformKernel, TestCPUGenerator>(self, from, to, generator);
+}
+
 // ==================================================== Cauchy ========================================================
 
 Tensor& custom_rng_cauchy_(Tensor& self, double median, double sigma, Generator generator) {
@@ -90,43 +98,23 @@ Tensor& custom_rng_cauchy_(Tensor& self, double median, double sigma, Generator 
 class RNGTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    static auto registry = torch::RegisterOperators()
-// ==================================================== Random ========================================================
-      .op(torch::RegisterOperators::options()
-        .schema("aten::random_.from(Tensor(a!) self, int from, int? to, *, Generator? generator=None) -> Tensor(a!)")
-        .impl_unboxedOnlyKernel<decltype(random_from_to), &random_from_to>(DispatchKey::CustomRNGKeyId))
-      .op(torch::RegisterOperators::options()
-        .schema("aten::random_.to(Tensor(a!) self, int to, *, Generator? generator=None) -> Tensor(a!)")
-        .impl_unboxedOnlyKernel<decltype(random_to), &random_to>(DispatchKey::CustomRNGKeyId))
-      .op(torch::RegisterOperators::options()
-        .schema("aten::random_(Tensor(a!) self, *, Generator? generator=None) -> Tensor(a!)")
-        .impl_unboxedOnlyKernel<decltype(random_), &random_>(DispatchKey::CustomRNGKeyId))
-// ==================================================== Normal ========================================================
-      .op(torch::RegisterOperators::options()
-        .schema("aten::normal_(Tensor(a!) self, float mean=0, float std=1, *, Generator? generator=None) -> Tensor(a!)")
-        .impl_unboxedOnlyKernel<decltype(normal_), &normal_>(DispatchKey::CustomRNGKeyId))
-      .op(torch::RegisterOperators::options()
-        .schema("aten::normal.Tensor_float_out(Tensor mean, float std=1, *, Generator? generator=None, Tensor(a!) out) -> Tensor(a!)")
-        .impl_unboxedOnlyKernel<decltype(normal_Tensor_float_out), &normal_Tensor_float_out>(DispatchKey::CustomRNGKeyId))
-      .op(torch::RegisterOperators::options()
-        .schema("aten::normal.float_Tensor_out(float mean, Tensor std, *, Generator? generator=None, Tensor(a!) out) -> Tensor(a!)")
-        .impl_unboxedOnlyKernel<decltype(normal_float_Tensor_out), &normal_float_Tensor_out>(DispatchKey::CustomRNGKeyId))
-      .op(torch::RegisterOperators::options()
-        .schema("aten::normal.Tensor_Tensor_out(Tensor mean, Tensor std, *, Generator? generator=None, Tensor(a!) out) -> Tensor(a!)")
-        .impl_unboxedOnlyKernel<decltype(normal_Tensor_Tensor_out), &normal_Tensor_Tensor_out>(DispatchKey::CustomRNGKeyId))
-      .op(torch::RegisterOperators::options()
-        .schema("aten::normal.Tensor_float(Tensor mean, float std=1, *, Generator? generator=None) -> Tensor")
-        .impl_unboxedOnlyKernel<decltype(normal_Tensor_float), &normal_Tensor_float>(DispatchKey::CustomRNGKeyId))
-      .op(torch::RegisterOperators::options()
-        .schema("aten::normal.float_Tensor(float mean, Tensor std, *, Generator? generator=None) -> Tensor")
-        .impl_unboxedOnlyKernel<decltype(normal_float_Tensor), &normal_float_Tensor>(DispatchKey::CustomRNGKeyId))
-      .op(torch::RegisterOperators::options()
-        .schema("aten::normal.Tensor_Tensor(Tensor mean, Tensor std, *, Generator? generator=None) -> Tensor")
-        .impl_unboxedOnlyKernel<decltype(normal_Tensor_Tensor), &normal_Tensor_Tensor>(DispatchKey::CustomRNGKeyId))
-// ==================================================== Cauchy ========================================================
-      .op(torch::RegisterOperators::options()
-        .schema("aten::cauchy_(Tensor(a!) self, float median=0, float sigma=1, *, Generator? generator=None) -> Tensor(a!)")
-        .impl_unboxedOnlyKernel<decltype(custom_rng_cauchy_), &custom_rng_cauchy_>(DispatchKey::CustomRNGKeyId));
+    static auto registry = torch::import()
+      // Random
+      .impl_UNBOXED("aten::random_.from",             kCustomRNG, random_from_to)
+      .impl_UNBOXED("aten::random_.to",               kCustomRNG, random_to)
+      .impl_UNBOXED("aten::random_",                  kCustomRNG, random_)
+      // Normal
+      .impl_UNBOXED("aten::normal_",                  kCustomRNG, normal_)
+      .impl_UNBOXED("aten::normal.Tensor_float_out",  kCustomRNG, normal_Tensor_float_out)
+      .impl_UNBOXED("aten::normal.float_Tensor_out",  kCustomRNG, normal_float_Tensor_out)
+      .impl_UNBOXED("aten::normal.Tensor_Tensor_out", kCustomRNG, normal_Tensor_Tensor_out)
+      .impl_UNBOXED("aten::normal.Tensor_float",      kCustomRNG, normal_Tensor_float)
+      .impl_UNBOXED("aten::normal.float_Tensor",      kCustomRNG, normal_float_Tensor)
+      .impl_UNBOXED("aten::normal.Tensor_Tensor",     kCustomRNG, normal_Tensor_Tensor)
+      .impl_UNBOXED("aten::uniform_",                 kCustomRNG, uniform_)
+      // Cauchy
+      .impl_UNBOXED("aten::cauchy_",                  kCustomRNG, custom_rng_cauchy_)
+    ;
   }
 };
 
@@ -258,6 +246,23 @@ TEST_F(RNGTest, Normal_Tensor_Tensor) {
 
   auto expected = torch::empty_like(actual);
   native::templates::cpu::normal_kernel(expected, mean, std, check_generator<TestCPUGenerator>(gen));
+
+  ASSERT_TRUE(torch::allclose(actual, expected));
+}
+
+// ==================================================== Uniform =======================================================
+
+TEST_F(RNGTest, Uniform) {
+  const auto from = -24.24;
+  const auto to = 42.42;
+  auto gen = at::make_generator<TestCPUGenerator>(42.0);
+
+  auto actual = torch::empty({3, 3});
+  actual.uniform_(from, to, gen);
+
+  auto expected = torch::empty_like(actual);
+  auto iter = TensorIterator::nullary_op(expected);
+  native::templates::cpu::uniform_kernel(iter, from, to, check_generator<TestCPUGenerator>(gen));
 
   ASSERT_TRUE(torch::allclose(actual, expected));
 }

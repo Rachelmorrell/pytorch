@@ -212,6 +212,8 @@ def run_tests(argv=UNITTEST_ARGS):
                 if not os.path.exists(test_report_path):
                     os.makedirs(test_report_path)
             verbose = '--verbose' in argv or '-v' in argv
+            if verbose:
+                print('Test results will be stored in {}'.format(test_report_path))
             unittest.main(argv=argv, testRunner=xmlrunner.XMLTestRunner(output=test_report_path, verbosity=2 if verbose else 1))
         else:
             unittest.main(argv=argv)
@@ -294,6 +296,24 @@ TEST_SKIP_FAST = os.getenv('PYTORCH_TEST_SKIP_FAST', '0') == '1'
 if TEST_NUMPY:
     import numpy
 
+    # Dict of NumPy dtype -> torch dtype (when the correspondence exists)
+    numpy_to_torch_dtype_dict = {
+        numpy.bool       : torch.bool,
+        numpy.uint8      : torch.uint8,
+        numpy.int8       : torch.int8,
+        numpy.int16      : torch.int16,
+        numpy.int32      : torch.int32,
+        numpy.int64      : torch.int64,
+        numpy.float16    : torch.float16,
+        numpy.float32    : torch.float32,
+        numpy.float64    : torch.float64,
+        numpy.complex64  : torch.complex64,
+        numpy.complex128 : torch.complex128
+    }
+
+    # Dict of torch dtype -> NumPy dtype
+    torch_to_numpy_dtype_dict = {value : key for (key, value) in numpy_to_torch_dtype_dict.items()}
+
 ALL_TENSORTYPES = [torch.float,
                    torch.double,
                    torch.half]
@@ -338,7 +358,6 @@ def skipIfCompiledWithoutNumpy(fn):
         else:
             fn(*args, **kwargs)
     return wrapper
-
 
 def _test_function(fn, device):
     def run_test_function(self):

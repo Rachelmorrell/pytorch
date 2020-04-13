@@ -259,14 +259,6 @@ RegisterOperators reg({
           return 0;
         },
         aliasAnalysisFromSchema()),
-    Operator(
-        "aten::format(str self, ...) -> str",
-        [](Stack& stack) {
-          size_t num_inputs = pop(stack).toInt();
-          format(stack, num_inputs);
-          return 0;
-        },
-        aliasAnalysisFromSchema()),
 
 #define DEFINE_TORCH_TENSOR_OP(operator_type, c_type, tensor_creation_op)  \
   Operator(                                                                \
@@ -363,15 +355,6 @@ RegisterOperators reg({
     Operator(
         "aten::as_tensor(t[] data, *, ScalarType? dtype=None, Device? device=None) -> Tensor",
         createTensorFromList<false>,
-        aliasAnalysisFromSchema()),
-    Operator(
-        "aten::_assert_int_or_pair(int[] vals, str name, str message) -> Tensor",
-        [](Stack& stack) {
-          // Everything is a list at the point this is used, so don't do
-          // anything
-          drop(stack, 3);
-          return 0;
-        },
         aliasAnalysisFromSchema()),
     Operator(
         "aten::_pack_sequence(Tensor output, Tensor batch_sizes, Tensor? sorted_indices, "
