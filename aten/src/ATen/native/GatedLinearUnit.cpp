@@ -1,7 +1,6 @@
 #include <ATen/ATen.h>
-#include <ATen/NativeFunctions.h>
+#include <ATen/TensorIterator.h>
 #include <ATen/native/Activation.h>
-#include <ATen/native/TensorIterator.h>
 
 namespace at {
 namespace native {
@@ -38,7 +37,8 @@ Tensor glu(const Tensor& self, int64_t dim) {
   return at::glu_out(result, self, dim);
 }
 
-Tensor& glu_backward_out(const Tensor& grad_output, const Tensor& input, int64_t dim, Tensor& grad_input) {
+Tensor& glu_backward_cpu_out(const Tensor& grad_output, const Tensor& input,
+                             int64_t dim, Tensor& grad_input) {
   TORCH_CHECK(input.dim() > 0, "glu does not support 0-dimensional tensors");
   auto wrap_dim = maybe_wrap_dim(dim, input.dim());
   const int64_t nIn = input.size(wrap_dim);
@@ -56,19 +56,19 @@ Tensor& glu_backward_out(const Tensor& grad_output, const Tensor& input, int64_t
   at::sigmoid_out(gradInputfirstHalf, secondHalf);
   // for second gradinput half, can get a better performance by fusion
   auto iter = at::TensorIteratorConfig()
-    .add_borrowed_output(gradInputsecondHalf)
-    .add_borrowed_input(gradInputfirstHalf)
-    .add_borrowed_input(firstHalf)
-    .add_borrowed_input(grad_output)
+    .add_output(gradInputsecondHalf)
+    .add_input(gradInputfirstHalf)
+    .add_input(firstHalf)
+    .add_input(grad_output)
     .build();
   glu_backward_stub(iter.device_type(), iter);
   gradInputfirstHalf.mul_(grad_output);
   return grad_input;
 }
 
-Tensor glu_backward(const Tensor& grad_output, const Tensor& input, int64_t dim) {
+Tensor glu_backward_cpu(const Tensor& grad_output, const Tensor& input, int64_t dim) {
   auto grad_input = at::empty({0}, input.options());
-  return at::glu_backward_out(grad_input, grad_output, input, dim);
+  return glu_backward_cpu_out(grad_output, input, dim, grad_input);
 }
 
 } // at::native

@@ -10,12 +10,20 @@
 #include <torch/csrc/autograd/profiler.h>
 #include <torch/csrc/autograd/python_function.h>
 #include <torch/csrc/autograd/function.h>
+#include <torch/csrc/autograd/saved_variable.h>
+#include <torch/csrc/autograd/python_saved_variable_hooks.h>
 #include <torch/csrc/autograd/utils/wrap_outputs.h>
 #include <torch/csrc/autograd/utils/python_arg_parsing.h>
 #include <torch/csrc/utils/pycfunction_helpers.h>
 #include <c10/core/ScalarType.h>
 
 #include <set>
+
+struct DisableTorchDispatch {
+  DisableTorchDispatch() : guard_(c10::DispatchKey::Python) {
+  }
+  c10::impl::ExcludeDispatchKeyGuard guard_;
+};
 
 PyObject* THPAutograd_initExtension(PyObject* _unused, PyObject *unused) {
   using namespace torch::autograd::profiler;
@@ -108,7 +116,7 @@ PyObject* THPAutograd_initExtension(PyObject* _unused, PyObject *unused) {
       .value("Metal", c10::DeviceType::Metal);
 
 #ifdef USE_KINETO
-  py::class_<KinetoEvent>(m, "KinetoEvent")
+  py::class_<KinetoEvent>(m, "_KinetoEvent")
       // name of the event
       .def("name", &KinetoEvent::name)
       // PyTorch thread id of the start callback
@@ -186,7 +194,7 @@ PyObject* THPAutograd_initExtension(PyObject* _unused, PyObject *unused) {
       })
       .def("cuda_elapsed_us", &KinetoEvent::cudaElapsedUs);
 
-  py::class_<ProfilerResult>(m, "ProfilerResult")
+  py::class_<ProfilerResult>(m, "_ProfilerResult")
     .def("events", &ProfilerResult::events)
     .def("legacy_events", &ProfilerResult::legacy_events)
     .def("save", &ProfilerResult::save);
@@ -213,7 +221,7 @@ PyObject* THPAutograd_initExtension(PyObject* _unused, PyObject *unused) {
 #endif
   });
 
-  m.def("supported_kineto_activities", []() {
+  m.def("_supported_kineto_activities", []() {
     std::set<ActivityType> activities;
 #ifdef USE_KINETO
     activities.insert(ActivityType::CPU);
@@ -253,6 +261,18 @@ PyObject* THPAutograd_initExtension(PyObject* _unused, PyObject *unused) {
 
   py::class_<c10::InferenceMode>(_C_m, "_InferenceMode")
       .def(py::init<bool>());
+
+  py::class_<DisableTorchDispatch>(_C_m, "_DisableTorchDispatch")
+      .def(py::init<>());
+
+  py::class_<torch::autograd::SavedVariable>(m, "SavedTensor")
+    .def(py::init([]()->torch::autograd::SavedVariable {
+      TORCH_CHECK(false, "Trying to create a SavedTensor object from Python is forbidden.");
+    }))
+    .def("register_hooks", [](torch::autograd::SavedVariable &s, py::function &pack_hook, py::function &unpack_hook) {
+        // Because we use a py::object, pybind will increment the refcount of the hook functions for us
+        s.register_hooks(std::make_unique<torch::autograd::PySavedVariableHooks>(pack_hook, unpack_hook));
+    });
 
   Py_RETURN_TRUE;
 }

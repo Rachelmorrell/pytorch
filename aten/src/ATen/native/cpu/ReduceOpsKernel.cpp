@@ -43,8 +43,8 @@ static inline void cpu_cum_base_kernel(Tensor& result,
     .resize_outputs(false)
     // NOLINTNEXTLINE(bugprone-argument-comment)
     .declare_static_shape(self.sizes(), /*squash_dim=*/dim)
-    .add_borrowed_output(result)
-    .add_borrowed_input(self)
+    .add_output(result)
+    .add_input(self)
     .build();
 
   auto result_dim_stride = ensure_nonempty_stride(result, dim);
@@ -161,7 +161,7 @@ static void mean_kernel_impl(TensorIterator& iter) {
 }
 
 static void std_var_kernel_impl(TensorIterator& iter, int64_t correction, bool take_sqrt) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "std_cpu", [&] {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "std_cpu", [&] {
     binary_kernel_reduce(
         iter,
         WelfordOps<

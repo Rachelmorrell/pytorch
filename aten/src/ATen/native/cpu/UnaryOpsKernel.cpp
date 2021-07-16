@@ -55,8 +55,9 @@ template <typename T>
 void VmlLog(int64_t N, const T* X, T* Y) {
   constexpr int64_t K = Vectorized<T>::size();
   at::parallel_for(0, N, K, [=](int64_t begin, int64_t end) {
+    using VT = vec::vec_scalar_t<T>;
     vec::map(
-        [](Vectorized<T> x_vec) { return x_vec.log(); },
+        [](Vectorized<VT> x_vec) { return x_vec.log(); },
         Y + begin,
         X + begin,
         end - begin);
@@ -193,6 +194,7 @@ static void imag_kernel(TensorIteratorBase& iter) {
   });
 }
 
+// NB: Ignores the negative bit on tensors
 static void conj_kernel(TensorIteratorBase& iter) {
   AT_DISPATCH_ALL_TYPES_AND_COMPLEX_AND3(
       kBool, kBFloat16, kHalf, iter.common_dtype(), "conj_cpu", [&]() {
@@ -256,6 +258,7 @@ void reciprocal_kernel(TensorIteratorBase& iter) {
   });
 }
 
+// NB: Ignores the negative bit on tensors
 void neg_kernel(TensorIteratorBase& iter) {
   AT_DISPATCH_ALL_TYPES_AND_COMPLEX_AND2(kBFloat16, kHalf, iter.dtype(), "neg_cpu", [&]() {
     cpu_kernel_vec(
@@ -599,6 +602,13 @@ static void frexp_kernel(TensorIteratorBase& iter) {
   });
 }
 
+static void ndtri_kernel(TensorIteratorBase& iter) {
+  TORCH_INTERNAL_ASSERT(iter.ntensors() == 2);
+  AT_DISPATCH_FLOATING_TYPES(iter.common_dtype(), "ndtri_cpu", [&]() {
+        cpu_kernel(iter, [](scalar_t x) { return calc_ndtri(x); });
+      });
+}
+
 static void i0e_kernel(TensorIteratorBase& iter) {
   TORCH_INTERNAL_ASSERT(iter.ntensors() == 2);
   AT_DISPATCH_FLOATING_TYPES_AND(
@@ -608,6 +618,28 @@ static void i0e_kernel(TensorIteratorBase& iter) {
             [](scalar_t x) { return calc_i0e(x); },
             [](Vectorized<scalar_t> x) { return x.i0e(); });
       });
+}
+
+static void i1_kernel(TensorIteratorBase& iter) {
+  TORCH_INTERNAL_ASSERT(iter.ntensors() == 2);
+  AT_DISPATCH_FLOATING_TYPES(iter.common_dtype(), "i1_cpu", [&]() {
+    cpu_kernel(iter, [](scalar_t x) { return calc_i1(x); });
+  });
+}
+
+static void i1e_kernel(TensorIteratorBase& iter) {
+  TORCH_INTERNAL_ASSERT(iter.ntensors() == 2);
+  AT_DISPATCH_FLOATING_TYPES(iter.common_dtype(), "i1e_cpu", [&]() {
+    cpu_kernel(iter, [](scalar_t x) { return calc_i1e(x); });
+  });
+}
+
+static void erfcx_kernel(TensorIteratorBase& iter){
+  AT_DISPATCH_FLOATING_TYPES(iter.common_dtype(), "erfcx_cpu", [&]() {
+    cpu_kernel(
+      iter,
+      [](scalar_t a) -> scalar_t { return calc_erfcx(a); });
+  });
 }
 
 // TODO: Disable cont. branch to test more risky code
@@ -702,7 +734,7 @@ REGISTER_DISPATCH(real_stub, &CPU_CAPABILITY::real_kernel);
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 REGISTER_DISPATCH(imag_stub, &CPU_CAPABILITY::imag_kernel);
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-REGISTER_DISPATCH(conj_stub, &CPU_CAPABILITY::conj_kernel);
+REGISTER_DISPATCH(conj_physical_stub, &CPU_CAPABILITY::conj_kernel);
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 REGISTER_DISPATCH(exp2_stub, &CPU_CAPABILITY::exp2_kernel);
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
@@ -749,6 +781,14 @@ REGISTER_DISPATCH(special_entr_stub, &CPU_CAPABILITY::entr_kernel);
 REGISTER_DISPATCH(frexp_stub, &CPU_CAPABILITY::frexp_kernel);
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 REGISTER_DISPATCH(special_i0e_stub, &CPU_CAPABILITY::i0e_kernel);
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+REGISTER_DISPATCH(special_ndtri_stub, &CPU_CAPABILITY::ndtri_kernel);
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+REGISTER_DISPATCH(special_i1_stub, &CPU_CAPABILITY::i1_kernel);
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+REGISTER_DISPATCH(special_i1e_stub, &CPU_CAPABILITY::i1e_kernel);
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+REGISTER_DISPATCH(special_erfcx_stub, &CPU_CAPABILITY::erfcx_kernel);
 
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables,modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)

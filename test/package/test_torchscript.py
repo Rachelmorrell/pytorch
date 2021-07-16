@@ -1,5 +1,4 @@
 from io import BytesIO
-from tempfile import TemporaryDirectory
 from unittest import skipIf
 
 import torch
@@ -8,7 +7,6 @@ from torch.testing._internal.common_utils import (
     run_tests,
     IS_FBCODE,
     IS_SANDCASTLE,
-    IS_WINDOWS,
 )
 
 try:
@@ -43,7 +41,7 @@ class PackageScriptModuleTest(PackageTestCase):
         scripted_mod = torch.jit.script(ModWithTensor(torch.rand(1, 2, 3)))
 
         buffer = BytesIO()
-        with PackageExporter(buffer, verbose=False) as e:
+        with PackageExporter(buffer) as e:
             e.save_pickle("res", "mod.pkl", scripted_mod)
 
         buffer.seek(0)
@@ -65,49 +63,13 @@ class PackageScriptModuleTest(PackageTestCase):
         scripted_mod = torch.jit.script(ModWithTensor(torch.rand(1, 2, 3)))
 
         filename = self.temp()
-        with PackageExporter(filename, verbose=False) as e:
+        with PackageExporter(filename) as e:
             e.save_pickle("res", "mod.pkl", scripted_mod)
 
         importer = PackageImporter(filename)
         loaded_mod = importer.load_pickle("res", "mod.pkl")
         input = torch.rand(1, 2, 3)
         self.assertEqual(loaded_mod(input), scripted_mod(input))
-
-    @skipIf(
-        IS_FBCODE or IS_SANDCASTLE or IS_WINDOWS,
-        "Tests that use temporary files are disabled in fbcode",
-    )
-    def test_save_scriptmodule_directory(self):
-        """
-        Test basic saving and loading of a ScriptModule in a directory.
-        Currently not supported.
-        """
-        from package_a.test_module import ModWithTensor
-
-        scripted_mod = torch.jit.script(ModWithTensor(torch.rand(1, 2, 3)))
-
-        filename = self.temp()
-        with PackageExporter(filename, verbose=False) as e:
-            e.save_pickle("res", "mod.pkl", scripted_mod)
-
-        # test we can load from a directory
-        import zipfile
-
-        zip_file = zipfile.ZipFile(filename, "r")
-
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "Loading ScriptObjects from a PackageImporter created from a "
-            "directory is not supported. Use a package archive file instead.",
-        ):
-            with TemporaryDirectory() as temp_dir:
-                zip_file.extractall(path=temp_dir)
-                dir_importer = PackageImporter(
-                    str(Path(temp_dir) / Path(filename).name)
-                )
-                dir_mod = dir_importer.load_pickle("res", "mod.pkl")
-                input = torch.rand(1, 2, 3)
-                self.assertEqual(dir_mod(input), scripted_mod(input))
 
     def test_save_scriptmodule_with_submods(self):
         """
@@ -120,7 +82,7 @@ class PackageScriptModuleTest(PackageTestCase):
         )
 
         buffer = BytesIO()
-        with PackageExporter(buffer, verbose=False) as e:
+        with PackageExporter(buffer) as e:
             e.save_pickle("res", "mod.pkl", scripted_mod)
 
         buffer.seek(0)
@@ -168,7 +130,7 @@ class PackageScriptModuleTest(PackageTestCase):
         scripted_mod_1 = torch.jit.script(TopMod())
 
         buffer = BytesIO()
-        with PackageExporter(buffer, verbose=False) as e:
+        with PackageExporter(buffer) as e:
             e.save_pickle("res", "mod1.pkl", scripted_mod_0)
             e.save_pickle("res", "mod2.pkl", scripted_mod_1)
 
@@ -191,7 +153,7 @@ class PackageScriptModuleTest(PackageTestCase):
         scripted_mod_1 = torch.jit.script(ModWithTensor(torch.rand(1, 2, 3)))
 
         buffer = BytesIO()
-        with PackageExporter(buffer, verbose=False) as e:
+        with PackageExporter(buffer) as e:
             e.save_pickle("res", "mod1.pkl", scripted_mod_0)
             e.save_pickle("res", "mod2.pkl", scripted_mod_1)
 
@@ -225,7 +187,7 @@ class PackageScriptModuleTest(PackageTestCase):
         )
 
         buffer = BytesIO()
-        with PackageExporter(buffer, verbose=False) as e:
+        with PackageExporter(buffer) as e:
             e.save_pickle("res", "mod0.pkl", scripted_mod_0)
             e.save_pickle("res", "mod1.pkl", scripted_mod_1)
             e.save_pickle("res", "mod2.pkl", scripted_mod_0)
@@ -257,7 +219,7 @@ class PackageScriptModuleTest(PackageTestCase):
         )
 
         buffer_0 = BytesIO()
-        with PackageExporter(buffer_0, verbose=False) as e:
+        with PackageExporter(buffer_0) as e:
             e.save_pickle("res", "mod1.pkl", scripted_mod_0)
 
         buffer_0.seek(0)
@@ -265,7 +227,7 @@ class PackageScriptModuleTest(PackageTestCase):
         loaded_module_0 = importer_0.load_pickle("res", "mod1.pkl")
 
         buffer_1 = BytesIO()
-        with PackageExporter(buffer_1, verbose=False) as e:
+        with PackageExporter(buffer_1) as e:
             e.save_pickle("res", "mod1.pkl", scripted_mod_1)
             e.save_pickle("res", "mod2.pkl", loaded_module_0)
 
@@ -301,14 +263,14 @@ class PackageScriptModuleTest(PackageTestCase):
         scripted_mod_1 = torch.jit.script(ModWithTensor(torch.rand(1, 2, 3)))
 
         buffer_0 = BytesIO()
-        with PackageExporter(buffer_0, verbose=False) as e:
+        with PackageExporter(buffer_0) as e:
             e.save_pickle("res", "mod1.pkl", scripted_mod_0)
 
         buffer_0.seek(0)
         importer_0 = importer = PackageImporter(buffer_0)
 
         buffer_1 = BytesIO()
-        with PackageExporter(buffer_1, verbose=False) as e:
+        with PackageExporter(buffer_1) as e:
             e.save_pickle("res", "mod1.pkl", scripted_mod_1)
 
         buffer_1.seek(0)
@@ -331,7 +293,7 @@ class PackageScriptModuleTest(PackageTestCase):
         script_mods_list = [scripted_mod_a, scripted_mod_b]
 
         buffer = BytesIO()
-        with PackageExporter(buffer, verbose=False) as e:
+        with PackageExporter(buffer) as e:
             e.save_pickle("res", "list.pkl", script_mods_list)
 
         buffer.seek(0)
@@ -355,7 +317,7 @@ class PackageScriptModuleTest(PackageTestCase):
         mod2 = ModWithSubmod(scripted_mod)
 
         buffer = BytesIO()
-        with PackageExporter(buffer, verbose=False) as e:
+        with PackageExporter(buffer) as e:
             e.intern("**")
             e.save_pickle("res", "mod1.pkl", mod1)
             e.save_pickle("res", "mod2.pkl", mod2)
@@ -385,7 +347,7 @@ class PackageScriptModuleTest(PackageTestCase):
         mod_parent = ModWithMultipleSubmods(mod1, mod2)
 
         buffer = BytesIO()
-        with PackageExporter(buffer, verbose=False) as e:
+        with PackageExporter(buffer) as e:
             e.intern("**")
             e.save_pickle("res", "mod.pkl", mod_parent)
 
@@ -410,7 +372,7 @@ class PackageScriptModuleTest(PackageTestCase):
         mod2 = ModWithSubmodAndTensor(shared_tensor, scripted_mod)
 
         buffer = BytesIO()
-        with PackageExporter(buffer, verbose=False) as e:
+        with PackageExporter(buffer) as e:
             e.intern("**")
             e.save_pickle("res", "tensor", shared_tensor)
             e.save_pickle("res", "mod1.pkl", mod1)
@@ -442,7 +404,7 @@ class PackageScriptModuleTest(PackageTestCase):
         mod1 = ModWithTwoSubmodsAndTensor(shared_tensor, scripted_mod_0, scripted_mod_1)
 
         buffer = BytesIO()
-        with PackageExporter(buffer, verbose=False) as e:
+        with PackageExporter(buffer) as e:
             e.intern("**")
             e.save_pickle("res", "mod1.pkl", mod1)
 
@@ -487,7 +449,7 @@ class PackageScriptModuleTest(PackageTestCase):
         mod1 = ModWithTwoSubmodsAndTensor(shared_tensor, scripted_mod_0, scripted_mod_1)
 
         buffer_0 = BytesIO()
-        with PackageExporter(buffer_0, verbose=False) as e:
+        with PackageExporter(buffer_0) as e:
             e.intern("**")
             e.save_pickle("res", "mod1.pkl", mod1)
 
@@ -496,7 +458,7 @@ class PackageScriptModuleTest(PackageTestCase):
         loaded_mod_0 = importer_0.load_pickle("res", "mod1.pkl")
 
         buffer_1 = BytesIO()
-        with PackageExporter(buffer_1, importer=importer_0, verbose=False) as e:
+        with PackageExporter(buffer_1, importer=importer_0) as e:
             e.intern("**")
             e.save_pickle("res", "mod1.pkl", loaded_mod_0)
 
@@ -534,7 +496,7 @@ class PackageScriptModuleTest(PackageTestCase):
         orig_mod = SimpleTest()
 
         buffer_0 = BytesIO()
-        with PackageExporter(buffer_0, verbose=False) as e:
+        with PackageExporter(buffer_0) as e:
             e.intern("**")
             e.save_pickle("model", "model.pkl", orig_mod)
 
@@ -548,7 +510,7 @@ class PackageScriptModuleTest(PackageTestCase):
         scripted_mod = torch.jit.script(loaded_mod)
 
         buffer_1 = BytesIO()
-        with PackageExporter(buffer_1, importer=importer_0, verbose=False) as e:
+        with PackageExporter(buffer_1, importer=importer_0) as e:
             e.intern("**")
             e.save_pickle("res", "scripted_mod.pkl", scripted_mod)
 
@@ -583,7 +545,7 @@ class PackageScriptModuleTest(PackageTestCase):
         scripted_imported = torch.jit.script(imported_mod)
 
         buffer = BytesIO()
-        with PackageExporter(buffer, verbose=False) as e:
+        with PackageExporter(buffer) as e:
             e.save_pickle("model", "inline.pkl", scripted_inline)
             e.save_pickle("model", "imported.pkl", scripted_imported)
 
@@ -624,7 +586,7 @@ class PackageScriptModuleTest(PackageTestCase):
         scripted_imported = torch.jit.script(imported_mod)
 
         buffer = BytesIO()
-        with PackageExporter(buffer, verbose=False) as e:
+        with PackageExporter(buffer) as e:
             e.save_pickle("model", "inline.pkl", scripted_inline)
             e.save_pickle("model", "imported.pkl", scripted_imported)
 
